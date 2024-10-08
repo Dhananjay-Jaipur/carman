@@ -1,9 +1,9 @@
-import 'package:carman/pages/user/Bookings.dart';
-import 'package:carman/pages/user/home.dart';
-import 'package:carman/pages/user/ride.dart';
-import 'package:carman/pages/user/profile.dart';
-import 'package:carman/pages/user/request.dart';
-import 'package:carman/pages/user/personal.dart';
+import 'package:carman/pages/user/pages/Bookings.dart';
+import 'package:carman/pages/user/pages/home.dart';
+import 'package:carman/pages/user/pages/ride.dart';
+import 'package:carman/pages/user/pages/profile.dart';
+import 'package:carman/pages/user/pages/request.dart';
+import 'package:carman/pages/user/pages/personal.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -31,59 +31,67 @@ class UserHomeState extends State<UserHome> {
 
   List pageTitle = ["👤 Official", "Bookings", "Rides", "Request", "Profile"];
 
-  Widget buildRadioOptions() {
-    return Container(
-      margin: const EdgeInsets.all(20),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Select Mode:',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          RadioListTile<int>(
-            title: const Text('Official'),
-            value: 1,
-            groupValue: selectedValue,
-            onChanged: (value) {
-              setState(() {
-                selectedValue = value!;
-                subTitle = "👤 Official";
-                pages = [
-                  const Home(),
-                  const Bookings(),
-                  const Ride(),
-                  const Request(),
-                  const Profile(),
-                ];
-                showOptions = false; // Hide options after selection
-              });
-            },
+  Future buildOptions() {
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Select Mode'),
+          content: Column(
+            mainAxisSize: MainAxisSize
+                .min, // Ensures the column takes only the space needed
+            children: [
+              RadioListTile<int>(
+                title: const Text('Official'),
+                value: 1,
+                groupValue: selectedValue,
+                onChanged: (value) {
+                  setState(() {
+                    selectedValue = value!;
+                    subTitle = "👤 Official";
+                    pages = [
+                      const Home(),
+                      const Bookings(),
+                      const Ride(),
+                      const Request(),
+                      const Profile(),
+                    ];
+                    Navigator.of(context).pop(); // Close dialog after selection
+                  });
+                },
+              ),
+              RadioListTile<int>(
+                title: const Text('Personal'),
+                value: 2,
+                groupValue: selectedValue,
+                onChanged: (value) {
+                  setState(() {
+                    selectedValue = value!;
+                    subTitle = "👤 Personal";
+                    pages = [
+                      const Peraonal(),
+                      const Bookings(),
+                      const Ride(),
+                      const Request(),
+                      const Profile(),
+                    ];
+                    Navigator.of(context).pop(); // Close dialog after selection
+                  });
+                },
+              ),
+            ],
           ),
-          RadioListTile<int>(
-            title: const Text('Personal'),
-            value: 2,
-            groupValue: selectedValue,
-            onChanged: (value) {
-              setState(() {
-                selectedValue = value!;
-                subTitle = "👤 Personal";
-                pages = [
-                  const Peraonal(),
-                  const Bookings(),
-                  const Ride(),
-                  const Request(),
-                  const Profile(),
-                ];
-                showOptions = false; // Hide options after selection
-              });
-            },
-          ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context)
+                    .pop(); // Close dialog without making a selection
+              },
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -160,12 +168,13 @@ class UserHomeState extends State<UserHome> {
             leading: Padding(
               padding: const EdgeInsets.all(4),
               child: Image.asset("assets/logo.png", height: double.infinity),
-              ),
+            ),
             title: _buildText("CARMAN", isTablet: isTablet),
             centerTitle: false,
             actions: [
               GestureDetector(
                 onTap: () {
+                  buildOptions();
                   setState(() {
                     showOptions = !showOptions; // Toggle visibility of options
                   });
@@ -209,9 +218,9 @@ class UserHomeState extends State<UserHome> {
           backgroundColor: Colors.white,
           surfaceTintColor: Colors.white,
           leading: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Image.asset("assets/logo.png", height: double.infinity),
-              ),
+            padding: const EdgeInsets.all(4),
+            child: Image.asset("assets/logo.png", height: double.infinity),
+          ),
           title: _buildText("CARMAN", isTablet: isTablet),
           centerTitle: false,
           actions: [
@@ -230,7 +239,8 @@ class UserHomeState extends State<UserHome> {
       bottomNavigationBar: myBottomNavigationBar(),
       body: Column(
         children: [
-          if (showOptions && selectedIndex == 0) buildRadioOptions(), // Show radio options if toggled
+          // if (showOptions && selectedIndex == 0)
+          // buildOptions(), // Show radio options if toggled
           Expanded(child: pages[selectedIndex]), // The main content
         ],
       ),

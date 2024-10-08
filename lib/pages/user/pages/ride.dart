@@ -3,8 +3,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
-import '../../utils/GlobalApi.dart';
-import '../../utils/toast.dart';
+import '../../../utils/GlobalApi.dart';
+import '../../../utils/toast.dart';
 import 'package:http/http.dart' as http;
 
 class Ride extends StatefulWidget {

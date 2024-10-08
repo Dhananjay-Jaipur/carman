@@ -1,238 +1,217 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
-import 'dart:ui';
+import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:carman/utils/GlobalApi.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:location/location.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter/services.dart';
-import 'dart:math'; // For calculations
 
-class Map extends StatefulWidget {
+class MapsFragment extends StatefulWidget {
+  const MapsFragment({super.key});
+
   @override
-  _MapState createState() => _MapState();
+  _MapsFragmentState createState() => _MapsFragmentState();
 }
 
-class _MapState extends State<Map> {
-  GoogleMapController? mapController;
-  LatLng? userLocation;
-  Marker? currentLocationMarker;
-  BitmapDescriptor? carIcon;
-  String? nearestVehicleID;
-  String? nearestVehicleCarNo;
-  List? vehicles;
-  var vehicleNames;
+class _MapsFragmentState extends State<MapsFragment> {
+  GoogleMapController? _mapController;
+  Marker? _currentLocationMarker;
+  BitmapDescriptor? _carIcon;
+  String? _nearestVehicleID;
+  String? _nearestVehicleCarNo;
+  final Location _location = Location();
+  LatLng? _currentLocation;
+
+  final Set<Marker> _carMarkers = {};
 
   @override
   void initState() {
     super.initState();
-    _loadCarIcon();
-    _getUserLocation();
-    _loadCarLocations();
-    fetchVehicles();
+    // _loadCarIcon();
+    _initMarker();
+    _checkLocationPermission();
   }
 
-  Future<void> _loadCarIcon() async {
-    // Load the car icon from assets
-    final Uint8List markerIcon =
-        await _getBytesFromAsset('assets/car.png', 100);
-    carIcon = BitmapDescriptor.fromBytes(markerIcon);
+  Future<Uint8List> getBytesFromAsset(String path, int width) async {
+    ByteData data = await rootBundle.load(path);
+    ui.Codec codec = await ui.instantiateImageCodec(data.buffer.asUint8List(),
+        targetWidth: width);
+    ui.FrameInfo fi = await codec.getNextFrame();
+    return (await fi.image.toByteData(format: ui.ImageByteFormat.png))!
+        .buffer
+        .asUint8List();
   }
 
-  Future<Uint8List> _getBytesFromAsset(String path, int width) async {
-    final ByteData data = await rootBundle.load(path);
-    final Uint8List bytes = data.buffer.asUint8List();
+  Future<void> _initMarker() async {
+    final markerImage = await _getScaledMarkerImage();
 
-    // ignore: unnecessary_nullable_for_final_variable_declarations
-    var codec = await instantiateImageCodec(bytes, targetWidth: width);
-    final FrameInfo fi = await codec.getNextFrame();
-    final ByteData? resizedData =
-        await fi.image.toByteData(format: ImageByteFormat.png);
-    return resizedData!.buffer.asUint8List();
+    setState(() {
+      _carIcon = markerImage; // Assign the scaled image to your variable
+    });
   }
 
-  Future<void> _getUserLocation() async {
-    Location location = Location();
+  Future<BitmapDescriptor> _getScaledMarkerImage() async {
+    final ByteData bytes = await rootBundle.load('assets/car.png');
+    final Uint8List list = bytes.buffer.asUint8List();
 
-    // Request location permissions
-    bool serviceEnabled = await location.serviceEnabled();
+    final ui.Codec codec =
+        await ui.instantiateImageCodec(list, targetWidth: 90, targetHeight: 90);
+    final ui.FrameInfo frameInfo = await codec.getNextFrame();
+    final ui.Image image = frameInfo.image;
+
+    final ByteData? byteData =
+        await image.toByteData(format: ui.ImageByteFormat.png);
+    final Uint8List pngBytes = byteData!.buffer.asUint8List();
+
+    return BitmapDescriptor.fromBytes(pngBytes);
+  }
+
+  // Check location permission
+  Future<void> _checkLocationPermission() async {
+    bool serviceEnabled = await _location.serviceEnabled();
     if (!serviceEnabled) {
-      serviceEnabled = await location.requestService();
+      serviceEnabled = await _location.requestService();
       if (!serviceEnabled) return;
     }
 
-    PermissionStatus permissionGranted = await location.hasPermission();
+    PermissionStatus permissionGranted = await _location.hasPermission();
     if (permissionGranted == PermissionStatus.denied) {
-      permissionGranted = await location.requestPermission();
+      permissionGranted = await _location.requestPermission();
       if (permissionGranted != PermissionStatus.granted) return;
     }
 
-    // Get the user's location
-    LocationData locationData = await location.getLocation();
+    _getCurrentLocation();
+  }
+
+  // Get current location
+  Future<void> _getCurrentLocation() async {
+    final locationData = await _location.getLocation();
     setState(() {
-      userLocation = LatLng(locationData.latitude!, locationData.longitude!);
+      _currentLocation =
+          LatLng(locationData.latitude!, locationData.longitude!);
     });
-
-    _refreshMap();
+    _updateCurrentLocationMarker();
+    _loadCarLocations();
   }
 
-  Future<void> _refreshMap() async {
-    if (userLocation == null) return;
-
-    // Update the marker for the user's current location
-    if (currentLocationMarker != null) {
+  // Add or update the current location marker
+  void _updateCurrentLocationMarker() {
+    if (_currentLocation != null) {
+      final marker = Marker(
+        markerId: const MarkerId('current_location'),
+        position: _currentLocation!,
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
+        infoWindow: const InfoWindow(title: 'Current Location'),
+      );
       setState(() {
-        currentLocationMarker = null; // Remove previous marker
+        _currentLocationMarker = marker;
       });
+      _mapController
+          ?.animateCamera(CameraUpdate.newLatLngZoom(_currentLocation!, 15));
     }
-
-    Marker marker = Marker(
-      markerId: MarkerId('currentLocation'),
-      position: userLocation!,
-      infoWindow: InfoWindow(title: 'Current Location'),
-      icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
-    );
-
-    setState(() {
-      currentLocationMarker = marker; // Add the current location marker
-    });
-
-    // Move the camera to the user's location
-    mapController?.animateCamera(CameraUpdate.newLatLngZoom(userLocation!, 15));
-
-    // Load car locations after updating the current location
-    await _loadCarLocations();
   }
 
-  Future<void> fetchVehicles() async {
-  final url = '${GlobalApi.BASE_URL}vehicle.aspx'; // Your actual base URL
-
-  try {
-    final response = await http.get(Uri.parse(url));
-
-    if (response.statusCode == 200) {
-      // Decode the JSON response without type parameters
-      final data = jsonDecode(response.body);
-
-      // Extract the vehicle data directly into a list
-      vehicles = List<Map>.from(data['Response']);
-
-      // Prepare the list of vehicle markers
-      List<Marker> vehicleMarkers = vehicles!.map((vehicle) {
-        double latitude = double.parse(vehicle['Lat']);
-        double longitude = double.parse(vehicle['Long']);
-        String vehicleID = vehicle['ID'].toString(); // Ensure ID is a string
-        String carNo = vehicle['REGNO'];
-        String modelName = vehicle['ModelName'];
-
-        LatLng vehicleLocation = LatLng(latitude, longitude);
-
-        return Marker(
-          markerId: MarkerId(vehicleID), // Use the vehicle ID as the marker ID
-          position: vehicleLocation,
-          infoWindow: InfoWindow(
-            title: modelName,
-            snippet: 'Reg No: $carNo', // Show registration number in the snippet
-          ),
-          icon: BitmapDescriptor.defaultMarker, // You can use a custom icon if needed
-        );
-      }).toList();
-
-      // Update the state to refresh the map with vehicle markers
-      setState(() {
-        vehicles = vehicleMarkers; // Store the markers in a state variable
-      });
-    } else {
-      throw Exception('Failed to load vehicles');
-    }
-  } catch (error) {
-    print('Error fetching vehicles: $error');
-    // Handle the error (e.g., show a message)
-  }
-}
-
+  // Load car locations from API
   Future<void> _loadCarLocations() async {
-    String url =
-        '${GlobalApi.BASE_URL}vehicle.aspx'; // Replace with your API URL
-
+    if (_currentLocation == null) return;
+    final url = '${GlobalApi.BASE_URL}vehicle.aspx';
     try {
       final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        vehicles = data['Response'];
-
-        double minDistance = double.infinity;
-        nearestVehicleID = null;
-        nearestVehicleCarNo = null;
-
-        for (var vehicle in vehicles!) {
-          double latitude = double.parse(vehicle['Lat']);
-          double longitude = double.parse(vehicle['Long']);
-          String vehicleID = vehicle['ID'];
-          String carNo = vehicle['REGNO'];
-
-          LatLng carLocation = LatLng(latitude, longitude);
-
-          Marker marker = Marker(
-            markerId: MarkerId(vehicleID),
-            position: carLocation,
-            infoWindow: InfoWindow(title: 'Car No.: $carNo'),
-            icon: carIcon ?? BitmapDescriptor.defaultMarker,
-          );
-
-          setState(() {
-            // Add the vehicle marker to the map
-            // GoogleMap doesn't have a method to add a marker directly.
-            // Instead, maintain a list of markers and update the state.
-          });
-
-          // Calculate distance to find the nearest vehicle
-          if (userLocation != null) {
-            double distance = _calculateDistance(
-              userLocation!.latitude,
-              userLocation!.longitude,
-              latitude,
-              longitude,
-            );
-
-            if (distance < minDistance) {
-              minDistance = distance;
-              nearestVehicleID = vehicleID;
-              nearestVehicleCarNo = carNo;
-            }
-          }
-        }
-
-        if (nearestVehicleID != null) {
-          print('Nearest Vehicle ID: $nearestVehicleID');
-        } else {
-          print('No nearest vehicle found.');
-        }
+        final jsonResponse = jsonDecode(response.body);
+        print("vehicle response::::::::::::::::::::::::\n$jsonResponse");
+        final carsArray = jsonResponse['Response'] as List<dynamic>;
+        print("carsArray response::::::::::::::::::::::::\n$carsArray");
+        _handleCarLocations(jsonResponse);
       } else {
-        throw Exception('Failed to load vehicles');
+        print('Error fetching car locations: ${response.statusCode}');
       }
-    } catch (error) {
-      print('Error fetching vehicles: $error');
+    } catch (e) {
+      print('Error: $e');
     }
   }
 
-  double _calculateDistance(
-      double lat1, double lon1, double lat2, double lon2) {
-    const int earthRadius = 6371; // Earth's radius in kilometers
-    double dLat = _degreesToRadians(lat2 - lat1);
-    double dLon = _degreesToRadians(lon2 - lon1);
+  // Handle car locations
+  void _handleCarLocations(carsArray) {
+    double minDistance = double.infinity;
+    String? nearestVehicleID;
+    String? nearestVehicleCarNo;
 
-    double a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(_degreesToRadians(lat1)) *
-            cos(_degreesToRadians(lat2)) *
-            sin(dLon / 2) *
-            sin(dLon / 2);
-    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    return earthRadius * c; // Distance in kilometers
+    // Clear existing car markers
+    _carMarkers.clear();
+
+    for (int i = 0; i < carsArray['Response'].length; i++) {
+      if (carsArray['Response'][i]['CurrentLocation'] != null) {
+        print(":::::::::::::::::::::::::${carsArray['Response'][i]['Long']}");
+        print(":::::::::::::::::::::::::${carsArray['Response'][i]['Lat']}");
+        final carLat = double.tryParse(
+            carsArray['Response'][i]['Lat']); // Convert string to double
+        final carLng = double.tryParse(carsArray['Response'][i]['Long']);
+        final carID = carsArray['Response'][i]['ID'];
+        final carNo = carsArray['Response'][i]['REGNO'];
+        final carPosition = LatLng(carLat!, carLng!);
+
+        // Add marker for each car
+        final carMarker = Marker(
+          markerId:
+              MarkerId(carID.toString()), // Ensure the marker ID is a string
+          position: carPosition,
+          icon: _carIcon ??
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: InfoWindow(title: 'Car No.: $carNo'),
+        );
+
+        _carMarkers.add(carMarker);
+
+        // Calculate distance to current location
+        if (_currentLocation != null) {
+          final distance = _calculateDistance(
+            _currentLocation!.latitude,
+            _currentLocation!.longitude,
+            carLat,
+            carLng,
+          );
+          if (distance < minDistance) {
+            minDistance = distance;
+            nearestVehicleID = carID.toString(); // Ensure the ID is a string
+            nearestVehicleCarNo = carNo;
+            GlobalApi.nearId = nearestVehicleID.toString();
+          }
+        }
+      }
+    }
+
+    setState(() {
+      _nearestVehicleID = nearestVehicleID;
+      _nearestVehicleCarNo = nearestVehicleCarNo;
+
+      // Print the nearest vehicle details
+      if (_nearestVehicleID != null) {
+        print(
+            '::::::::::::::::::::::::::::Nearest Vehicle ID: $_nearestVehicleID, Car No: $_nearestVehicleCarNo');
+      } else {
+        print(':::::::::::::::::::::::::::No nearest vehicle found.');
+      }
+    });
   }
 
+  // Calculate the distance between two locations
+  double _calculateDistance(
+      double lat1, double lon1, double lat2, double lon2) {
+    const double radius = 6371000; // Radius of the Earth in meters
+    final dLat = _degreesToRadians(lat2 - lat1);
+    final dLon = _degreesToRadians(lon2 - lon1);
+    final a = (sin(dLat / 2) * sin(dLat / 2)) +
+        cos(_degreesToRadians(lat1)) *
+            cos(_degreesToRadians(lat2)) *
+            (sin(dLon / 2) * sin(dLon / 2));
+    final c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    return radius * c;
+  }
+
+  // Convert degrees to radians
   double _degreesToRadians(double degrees) {
     return degrees * (pi / 180);
   }
@@ -240,23 +219,22 @@ class _MapState extends State<Map> {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: userLocation == null
-          ? Center(child: CircularProgressIndicator())
-          : GoogleMap(
-              onMapCreated: (controller) {
-                mapController = controller;
-                _refreshMap(); // Refresh map when created
-              },
-              myLocationEnabled: true,
-              initialCameraPosition: CameraPosition(
-                target: userLocation!,
-                zoom: 15,
-              ),
-              markers: {
-                if (currentLocationMarker != null) currentLocationMarker!,
-                // Add vehicle markers here if you maintain a list
-              },
-            ),
+      child: GoogleMap(
+        onMapCreated: (controller) {
+          _mapController = controller;
+        },
+        markers: {
+          if (_currentLocationMarker != null) _currentLocationMarker!,
+          ..._carMarkers, // Add car markers to the Google Map
+        },
+        initialCameraPosition: CameraPosition(
+          target: _currentLocation ?? const LatLng(0, 0),
+          zoom: 15,
+        ),
+        myLocationEnabled: true,
+        trafficEnabled: true,
+        buildingsEnabled: true,
+      ),
     );
   }
 }

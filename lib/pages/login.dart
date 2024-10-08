@@ -50,7 +50,7 @@ class _LoginState extends State<Login> {
         var myResponse = jsonDecode(response.body);
         print("Response: ${response.body}");
 
-        if (response.body == []) {
+        if (response.body == "[]") {
           myToast(title: 'user do not exist');
         }
 
@@ -120,22 +120,19 @@ class _LoginState extends State<Login> {
                       controller: input,
                       // validator: (value) => Validator().isEmail(value!),
                       autovalidateMode: AutovalidateMode.onUserInteraction,
-
                       textAlignVertical: TextAlignVertical.bottom,
-
-                      cursorColor: Colors.transparent,
-
-                      style: const TextStyle(fontSize: 24),
+                      style: const TextStyle(fontSize: 20),
+                      cursorColor: Colors.grey,
 
                       decoration: const InputDecoration(
                         prefixIcon: Icon(
                           CupertinoIcons.person,
                           color: Colors.black,
-                          size: 33,
+                          size: 25,
                         ),
-                        hintText: "E-mail / Mobile No / UserId",
-                        hintStyle: TextStyle(fontSize: 24, color: Colors.grey),
-                        errorStyle: TextStyle(color: Colors.redAccent),
+                        hintText: "Email / Mobile No / UserId",
+                        hintStyle: TextStyle(fontSize: 20, color: Colors.grey),
+                        errorStyle: TextStyle(color: Colors.redAccent),                        
                       ),
 
                       textInputAction: TextInputAction.next,
@@ -149,12 +146,9 @@ class _LoginState extends State<Login> {
                       controller: pass,
                       // validator: (value) => Validator().isPass(value!),
                       autovalidateMode: AutovalidateMode.onUserInteraction,
-
                       textAlignVertical: TextAlignVertical.bottom,
-
-                      cursorColor: Colors.transparent,
-
-                      style: const TextStyle(fontSize: 24),
+                      style: const TextStyle(fontSize: 20),
+                      cursorColor: Colors.grey,
 
                       obscureText: _obscureText,
 
@@ -162,11 +156,11 @@ class _LoginState extends State<Login> {
                         prefixIcon: const Icon(
                           Icons.lock_outline_rounded,
                           color: Colors.black,
-                          size: 33,
+                          size: 25,
                         ),
                         hintText: "Password",
                         hintStyle:
-                            const TextStyle(fontSize: 24, color: Colors.grey),
+                            const TextStyle(fontSize: 20, color: Colors.grey),
                         suffixIcon: IconButton(
                           onPressed: () {
                             ChangeText();

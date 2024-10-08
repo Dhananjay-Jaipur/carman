@@ -1,3 +1,16 @@
 {
     "java.configuration.updateBuildConfiguration": "interactive"
 }
+
+
+// {
+//     "java.home": "C:/Program Files/Java/jdk-17/bin",  // Path to your JDH17 installation
+//     "java.configuration.runtimes": [
+//       {
+//         "name": "JDK 17",
+//         "path": "C:/path/to/your/jdh17",
+//         "default": true
+//       }
+//     ]
+//   }
+  

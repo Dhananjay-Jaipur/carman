@@ -1,13 +1,13 @@
 import 'dart:convert';
 
-import 'package:carman/pages/user/proceed.dart';
+import 'package:carman/pages/user/pages/proceed.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:hive/hive.dart';
 
-import '../../utils/GlobalApi.dart';
-import '../../utils/toast.dart';
+import '../../../utils/GlobalApi.dart';
+import '../../../utils/toast.dart';
 import 'package:http/http.dart' as http;
 
 class Bookings extends StatefulWidget {
